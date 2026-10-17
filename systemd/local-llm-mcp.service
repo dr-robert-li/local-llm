@@ -1,0 +1,11 @@
+[Unit]
+Description=local-llm MCP server (127.0.0.1:8090/mcp, fronted by LiteLLM /mcp)
+After=llama-swap.service
+
+[Service]
+EnvironmentFile=%h/.config/local-llm/local.env
+ExecStart=%h/.local/bin/uv run --script ${PROJECT_DIR}/local_llm.py --http
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

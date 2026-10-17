@@ -1,0 +1,11 @@
+{
+  "enabledMcpjsonServers": ["local-llm"],
+  "permissions": {
+    "allow": [
+      "mcp__local-llm__status",
+      "mcp__local-llm__list_models",
+      "mcp__local-llm__logs",
+      "mcp__local-llm__ask_local"
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+# llama-swap: starts/stops engines on demand. Listens on 127.0.0.1:8080 only (no auth).
+# Reloaded automatically on save (--watch-config).
+healthCheckTimeout: 600
+
+macros:
+  llama-server: ${env.LLAMA_SERVER} --host 127.0.0.1 --port ${PORT} -ngl 999 -fa on --jinja
+  models: ${env.MODELS_DIR}
+
+models:
+  # default. MTP speculative decoding: ~50 -> 75-100 tok/s on GB10 (measured 2026-10-17)
+  gemma-4-26b-a4b:
+    cmd: |
+      ${llama-server}
+      -m ${models}/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf
+      --mmproj ${models}/gemma-4-26B-A4B-it-GGUF/mmproj-F16.gguf
+      --spec-type draft-mtp -md ${models}/gemma-4-26B-A4B-it-GGUF/mtp-gemma-4-26B-A4B-it.gguf
+      -c 65536
+    ttl: 1800
+
+  # dense, slower (~9.6 tok/s)
+  qwen3.8-27b:
+    cmd: |
+      ${llama-server}
+      -m ${models}/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_XL.gguf
+      --mmproj ${models}/Qwen3.8-27B-GGUF/mmproj-F16.gguf
+      -c 65536
+    ttl: 1800  # unload after 30 min idle

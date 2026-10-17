@@ -1,0 +1,17 @@
+# secrets
+.env
+.env.*
+
+# config backups written by local_llm.py
+*.bak-*
+
+# python
+__pycache__/
+*.pyc
+.venv/
+
+# local-only Claude Code settings
+.claude/settings.local.json
+
+# machine-specific settings
+local.env

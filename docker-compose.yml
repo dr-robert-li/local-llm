@@ -1,0 +1,9 @@
+services:
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.105.1  # pinned; bump deliberately
+    network_mode: host  # reaches llama-swap on 127.0.0.1; serves 0.0.0.0:4000 (LAN, Tailscale, loopback)
+    env_file: .env
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--host", "0.0.0.0", "--port", "4000"]
+    restart: unless-stopped

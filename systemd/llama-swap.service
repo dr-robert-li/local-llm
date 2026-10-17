@@ -1,0 +1,12 @@
+[Unit]
+Description=llama-swap model switcher
+After=network-online.target
+
+[Service]
+# local.env symlinked here: ln -sf $PROJECT_DIR/local.env ~/.config/local-llm/local.env
+EnvironmentFile=%h/.config/local-llm/local.env
+ExecStart=%h/.local/bin/llama-swap --config ${PROJECT_DIR}/llama-swap/config.yaml --listen 127.0.0.1:8080 --watch-config
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

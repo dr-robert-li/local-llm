@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0] - 2026-10-17
+
+### Added
+- Operator portal (Caddy, `:8000`) linking every UI, with basic-auth proxies for the loopback-only llama-swap UI (`:8001`) and DGX Dashboard (`:8002`).
+- Open WebUI (`v0.11.4`, `:3000`) wired to LiteLLM.
+- Postgres (`17.6`, loopback) for LiteLLM virtual keys, spend tracking and the admin UI at `:4000/ui`.
+- `gemma-4-26b-a4b-vllm`: vLLM (NGC `vllm:26.08-py3`) with NVFP4 weights as a llama-swap entry, for concurrent load.
+- `gemma-4-26b-a4b-q8`: Q8_0 + MTP variant.
+- `gemma-4-26b-a4b-think`: LiteLLM alias with thinking enabled.
+- `claude-local.sh`: run Claude Code on local models through LiteLLM's Anthropic endpoint.
+- `bench.sh`: llama-server throughput benchmark.
+
+### Changed
+- Gemma thinking is off by default (server-side); enable per request or via the `-think` alias.
+- Each compose service receives only the secrets it needs (no shared `env_file`).
+
+### Notes
+- MTP `--spec-draft-n-max` sweep (1–6): default 3 is fastest (avg 79 tok/s), so unchanged.
+
 ## [0.1.0] - 2026-10-17
 
 ### Added

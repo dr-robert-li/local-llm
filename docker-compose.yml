@@ -1,9 +1,57 @@
+# Secrets come from .env (compose interpolation); each service gets only what it needs.
 services:
   litellm:
     image: ghcr.io/berriai/litellm:v1.105.1  # pinned; bump deliberately
     network_mode: host  # reaches llama-swap on 127.0.0.1; serves 0.0.0.0:4000 (LAN, Tailscale, loopback)
-    env_file: .env
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD}@127.0.0.1:5432/litellm
     volumes:
       - ./litellm/config.yaml:/app/config.yaml:ro
     command: ["--config", "/app/config.yaml", "--host", "0.0.0.0", "--port", "4000"]
+    depends_on:
+      db: { condition: service_healthy }
     restart: unless-stopped
+
+  # LiteLLM keys, spend tracking and admin UI (:4000/ui)
+  db:
+    image: postgres:17.6-alpine
+    ports: ["127.0.0.1:5432:5432"]
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_DB: litellm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "litellm"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # chat UI on 0.0.0.0:3000 (own accounts; first sign-up becomes admin)
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:v0.11.4
+    network_mode: host
+    environment:
+      PORT: 3000
+      OPENAI_API_BASE_URL: http://127.0.0.1:4000/v1
+      OPENAI_API_KEY: ${LITELLM_MASTER_KEY}  # ponytail: master key; switch to a LiteLLM virtual key for least privilege
+      ENABLE_OLLAMA_API: "false"
+    volumes: [open-webui:/app/backend/data]
+    restart: unless-stopped
+
+  # operator portal :8000, plus basic-auth proxies for loopback-only UIs (:8001 llama-swap, :8002 DGX Dashboard)
+  portal:
+    image: caddy:2.11.4-alpine
+    network_mode: host
+    environment:
+      PORTAL_USER: ${PORTAL_USER}
+      PORTAL_PASSWORD_HASH: ${PORTAL_PASSWORD_HASH}
+    volumes:
+      - ./portal/www:/srv:ro
+      - ./portal/Caddyfile:/etc/caddy/Caddyfile:ro
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  open-webui:

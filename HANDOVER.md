@@ -12,7 +12,8 @@ Last updated: 2026-10-17. Read this first when resuming.
 clients (LAN / Tailscale / loopback)
   └─► LiteLLM :4000  0.0.0.0, Docker, keys required   — the ONLY network-exposed service
         ├─► /mcp → local-llm MCP 127.0.0.1:8090/mcp (systemd user svc, read-only tools only via allowed_tools)
-        └─► llama-swap 127.0.0.1:8080, native systemd user service, no auth
+        └─► llama-swap 127.0.0.1:8080 (llama-server or vLLM container)
+  + Open WebUI :3000, portal :8000-8002 (Caddy, basic auth), Postgres 127.0.0.1:5432, native systemd user service, no auth
               ├─► llama-server (llama.cpp, native build)  — DEFAULT engine
               └─► vLLM (spark-vllm-docker)                 — LATER, add as llama-swap entry, exclusive
 ```
@@ -59,6 +60,12 @@ curl -s -o /dev/null -w '%{http_code}' 127.0.0.1:4000/v1/models   # 401 = auth w
 
 ## Next steps
 1. ~~`local-llm` MCP server~~ DONE 2026-10-17. Tools: `status`, `list_models`, `logs`, `ask_local` (allowlisted); `load`, `unload`, `pull`, `add_model`, `remove_model` (ask). Config edits: ruamel round-trip (comments kept), timestamped `.bak-*` backup, atomic replace; llama-swap reloads automatically (verified). LiteLLM needs `docker restart litellm-proxy-litellm-1` after add/remove (atomic replace also requires restart for the file bind mount). `ask_local` goes straight to llama-swap (no key). Restart Claude Code in this folder to pick up the server. External: `http://<host>:4000/mcp/` with `Authorization: Bearer <litellm key>`; tools appear as `local_llm-<tool>`; only status/list_models/logs/ask_local allowed (mutating ones return 'not allowed' — verified). Edit `allowed_tools` + restart LiteLLM to change.
-2. Optional: tune MTP `--spec-draft-n-max` (default 3); benchmark Gemma Q8_0 (27 GB) for quality vs speed.
-3. Optional: decide thinking default for Gemma (server-side off vs per-request).
-4. Later: Open WebUI; Postgres + LiteLLM UI; vLLM entry in llama-swap; `ANTHROPIC_BASE_URL=http://127.0.0.1:4000` to run Claude Code on local models.
+2. ~~Tune MTP / benchmark Q8_0~~ DONE 2026-10-17 (`bench.sh`). `--spec-draft-n-max` 1..6 → avg 67/73/**79**/71/70/65 tok/s: default 3 kept. Q8_0 + MTP avg 59 tok/s (Q4_K_XL + MTP 79; plain Q8 44 vs Q4 48) → Q4_K_XL stays default, Q8_0 added as `gemma-4-26b-a4b-q8`.
+3. ~~Thinking default~~ DONE: off server-side (`--chat-template-kwargs '{"enable_thinking":false}'`); simple Q 10 vs 279 tokens. Per-request `chat_template_kwargs.enable_thinking=true` or LiteLLM alias `gemma-4-26b-a4b-think` (`extra_body`).
+4. Step 4:
+   - ~~Postgres + LiteLLM UI~~ DONE: `db` service (127.0.0.1:5432), `DATABASE_URL`; `/ui` login admin / master key. Virtual keys verified (model-scoped key → 403 on other models). Local models have no price → spend 0.
+   - ~~Claude Code on local models~~ DONE: `claude-local.sh` (unsets inherited ANTHROPIC_CUSTOM_HEADERS/AUTH_TOKEN — a parent gateway session's vars broke it; sets CLAUDE_CODE_MAX_CONTEXT_TOKENS=65536). Tool use verified.
+   - ~~Operator portal~~ DONE: Caddy `portal` service, :8000 page + :8001 llama-swap UI + :8002 DGX Dashboard (loopback upstream 127.0.0.1:11000), shared basic auth (`PORTAL_*` in .env; hash base64-encoded to avoid `$` in compose interpolation).
+   - ~~Open WebUI~~ DONE: :3000, upstream LiteLLM (master key); container sees all models. First sign-up becomes admin — operator must create it.
+   - ~~vLLM entry~~ DONE: `gemma-4-26b-a4b-vllm` = NGC `vllm:26.08-py3` (vLLM 0.27.1) + `RedHatAI/gemma-4-26B-A4B-it-NVFP4`, `--gpu-memory-utilization 0.5` (40 GiB KV), cold start ~280 s. n=1 43 tok/s, n=8 252 tok/s aggregate (llama.cpp gemma n=8: 149). Launched via `sg docker -c` (one-line cmd!) + `cmdStop docker stop`; unload verified to remove the container.
+5. Later: Open WebUI on a LiteLLM virtual key; restart the user systemd manager (or reboot) so llama-swap gets the docker group natively instead of `sg docker`.

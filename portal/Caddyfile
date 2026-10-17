@@ -1,0 +1,28 @@
+{
+	auto_https off
+	admin off
+}
+
+(auth) {
+	basic_auth {
+		{$PORTAL_USER} {$PORTAL_PASSWORD_HASH}
+	}
+}
+
+:8000 {
+	import auth
+	root * /srv
+	file_server
+}
+
+# llama-swap UI (loopback-only upstream)
+:8001 {
+	import auth
+	reverse_proxy 127.0.0.1:8080
+}
+
+# NVIDIA DGX Dashboard (loopback-only upstream)
+:8002 {
+	import auth
+	reverse_proxy 127.0.0.1:11000
+}

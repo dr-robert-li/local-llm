@@ -7,13 +7,27 @@ macros:
   models: ${env.MODELS_DIR}
 
 models:
-  # default. MTP speculative decoding: ~50 -> 75-100 tok/s on GB10 (measured 2026-10-17)
+  # default. MTP speculative decoding: ~50 -> 75-100 tok/s on GB10 (measured 2026-10-17).
+  # --spec-draft-n-max left at 3: sweep 1..6 averaged 67/73/79/71/70/65 tok/s.
+  # Thinking off by default (simple Q: 10 vs 279 tokens); per request: chat_template_kwargs.enable_thinking=true.
   gemma-4-26b-a4b:
     cmd: |
       ${llama-server}
       -m ${models}/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf
       --mmproj ${models}/gemma-4-26B-A4B-it-GGUF/mmproj-F16.gguf
       --spec-type draft-mtp -md ${models}/gemma-4-26B-A4B-it-GGUF/mtp-gemma-4-26B-A4B-it.gguf
+      --chat-template-kwargs '{"enable_thinking":false}'
+      -c 65536
+    ttl: 1800
+
+  # higher-precision Gemma: Q8_0 + MTP 47-71 tok/s (avg 59 vs 79 for Q4_K_XL), 27 GB
+  gemma-4-26b-a4b-q8:
+    cmd: |
+      ${llama-server}
+      -m ${models}/gemma-4-26B-A4B-it-GGUF/gemma-4-26B-A4B-it-Q8_0.gguf
+      --mmproj ${models}/gemma-4-26B-A4B-it-GGUF/mmproj-F16.gguf
+      --spec-type draft-mtp -md ${models}/gemma-4-26B-A4B-it-GGUF/mtp-gemma-4-26B-A4B-it.gguf
+      --chat-template-kwargs '{"enable_thinking":false}'
       -c 65536
     ttl: 1800
 
@@ -25,3 +39,14 @@ models:
       --mmproj ${models}/Qwen3.8-27B-GGUF/mmproj-F16.gguf
       -c 65536
     ttl: 1800  # unload after 30 min idle
+
+  # vLLM (Docker, NGC image) for concurrent load: 8 parallel -> 252 tok/s aggregate (llama.cpp 149),
+  # single request 43 tok/s (llama.cpp+MTP 79). Cold start ~5 min. Reserves 0.5 x 121 GB while loaded;
+  # llama-swap runs one model at a time, so loading this unloads the others.
+  # sg: the user systemd manager predates docker group membership.
+  gemma-4-26b-a4b-vllm:
+    # one line: the quoted string goes to sh -c, where a newline would split the command
+    cmd: >-
+      sg docker -c "docker rm -f llama-swap-vllm >/dev/null 2>&1; exec docker run --rm --name llama-swap-vllm --gpus all --ipc host -p 127.0.0.1:${PORT}:8000 -v ${models}/gemma-4-26B-A4B-it-NVFP4:/model:ro nvcr.io/nvidia/vllm:26.08-py3 vllm serve /model --served-model-name gemma-4-26b-a4b-vllm --gpu-memory-utilization 0.5 --max-model-len 65536"
+    cmdStop: sg docker -c "docker stop llama-swap-vllm"
+    ttl: 1800
